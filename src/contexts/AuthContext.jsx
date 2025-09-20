@@ -18,21 +18,46 @@ export const AuthProvider = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
   const [sessionId, setSessionId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // 检查本地存储中的登录状态
     const savedUser = localStorage.getItem('user');
+    console.log('AuthContext: Checking localStorage for user data:', savedUser);
+    
     if (savedUser) {
-      setIsLoggedIn(true);
-      setUser(JSON.parse(savedUser));
+      try {
+        const userData = JSON.parse(savedUser);
+        console.log('AuthContext: Parsed user data:', userData);
+        // 确保用户数据包含必要的信息
+        if (userData && (userData.access_token || userData.token)) {
+          console.log('AuthContext: Valid user data found, setting isLoggedIn to true');
+          setIsLoggedIn(true);
+          setUser(userData);
+        } else {
+          console.log('AuthContext: User data missing required fields');
+        }
+      } catch (error) {
+        console.error('AuthContext: Error parsing user data:', error);
+        localStorage.removeItem('user'); // 清除无效的用户数据
+      }
     }
     
-    const sessionId = localStorage.getItem('session_id');
+    let sessionId = localStorage.getItem('session_id');
     if (!sessionId) {
       // 生成并存储session ID
-      const uuid = uuidv4();
-      setSessionId(uuid);
+      sessionId = uuidv4();
+      localStorage.setItem('session_id', sessionId);
+      console.log('AuthContext: Generated new session ID:', sessionId);
+    } else {
+      console.log('AuthContext: Found existing session ID');
     }
+    setSessionId(sessionId);
+    
+    // 确保在所有检查完成后才设置isLoading为false
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 100);
   }, []);
 
   const login = async (username, password) => {
@@ -48,12 +73,12 @@ export const AuthProvider = ({ children }) => {
       
       if (!response.ok) {
         throw new Error('登录失败');
+        return false;
       }
       
-      // 先读取响应数据，避免在debugger时流被多次读取
+      // 先读取响应数据，避免流被多次读取
       const data = await response.json();
-      debugger;
-      // 可以在控制台查看data变量而不是直接读取response.json()
+      // 可以在控制台查看data变量
       // 假设API返回的数据包含token和user信息
       const userData = { username: data.username || username, access_token: data.access_token };
       localStorage.setItem('user', JSON.stringify(userData));
@@ -87,7 +112,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, user, login, logout, sessionId }}>
+    <AuthContext.Provider value={{ isLoggedIn, user, login, logout, sessionId, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
